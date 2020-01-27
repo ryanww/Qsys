@@ -304,8 +304,9 @@ namespace QscQsys
                 item.Value.Fire(new SimplEventArgs(eQscSimplEventIds.IsConnected, (SimplSharpString)"true", 1));
             }
 
-            this.SendDebug("Requesting all named components and controls");
-            this.commandQueue.Enqueue(JsonConvert.SerializeObject(new GetComponents()));
+            //On large projects - this is just massive and kills a processor.
+            //this.SendDebug("Requesting all named components and controls");
+            //this.commandQueue.Enqueue(JsonConvert.SerializeObject(new GetComponents()));
 
             if (Controls.Count() > 0)
             {
@@ -335,6 +336,47 @@ namespace QscQsys
                     commandQueue.Enqueue(JsonConvert.SerializeObject(addComponents));
                 }
             }
+
+            //Request Controls status in chunks of 25.
+            int ctlInd = 0;
+            for (int i = 0; i < Math.Ceiling((float)Controls.Count()/(float)25); i++)
+            {
+                GetControls gc = new GetControls();
+                gc.Params = new List<string>();
+                for (int x = ctlInd; x < (ctlInd + 25); x++)
+                {
+                    if (x < Controls.Count())
+                    {
+                        gc.Params.Add(Controls.ElementAt(x).Key);
+                    }
+                }
+                commandQueue.Enqueue(JsonConvert.SerializeObject(gc));
+                ctlInd += 25;
+            }
+
+            //Request Components current state.
+            foreach (var comp in Components)
+            {
+                GetComponent gc = new GetComponent();
+                gc.Params = new GetComponentParams();
+                gc.Params.Controls = new List<GetComponentControls>();
+                gc.Params.Name = comp.Key.Name;
+                foreach (var cont in comp.Key.Controls)
+                {
+                    gc.Params.Controls.Add(new GetComponentControls() { Name = cont.Name });
+                }
+                commandQueue.Enqueue(JsonConvert.SerializeObject(gc));
+            }
+
+            //addControls.ControlParams = new AddControlToChangeGroupParams();
+            //addControls.ControlParams.Controls = new List<string>();
+            //foreach (var item in Controls)
+            //{
+            //    addControls.ControlParams.Controls.Add(item.Key);
+            //    this.SendDebug(string.Format("Adding named control: {0} to change group", item.Key));
+            //}
+            //this.commandQueue.Enqueue(JsonConvert.SerializeObject(addControls));
+
         }
 
         private void SendHeartbeat(object _o)
@@ -384,25 +426,28 @@ namespace QscQsys
             {
                 try
                 {
-                    this.RxData.Append(this.responseQueue.Dequeue()); //Append received data to the COM buffer
-
-                    if (!this.busy)
+                    lock (RxData)
                     {
-                        this.busy = true;
-                        while (this.RxData.ToString().Contains("\x00"))
+                        this.RxData.Append(this.responseQueue.Dequeue()); //Append received data to the COM buffer
+
+                        if (!this.busy)
                         {
-                            string data = this.RxData.ToString().Substring(0, this.RxData.ToString().IndexOf("\x00"));
-                            this.RxData.Remove(0, this.RxData.ToString().IndexOf("\x00") + 1);
-
-                            if (!data.Contains("jsonrpc\":\"2.0\",\"method\":\"ChangeGroup.Poll\",\"params\":{\"Id\":\"1\",\"Changes\":[]}}") && data.Length > 3)
+                            this.busy = true;
+                            while (this.RxData.ToString().Contains("\x00"))
                             {
-                                if (this.debug)
-                                    this.SendDebug(string.Format("Dequeue to parse: {0}", data));
+                                string data = this.RxData.ToString().Substring(0, this.RxData.ToString().IndexOf("\x00"));
+                                this.RxData.Remove(0, this.RxData.ToString().IndexOf("\x00") + 1);
 
-                                this.ParseInternalResponse(data);
+                                if (!data.Contains("jsonrpc\":\"2.0\",\"method\":\"ChangeGroup.Poll\",\"params\":{\"Id\":\"1\",\"Changes\":[]}}") && data.Length > 3)
+                                {
+                                    if (this.debug)
+                                        this.SendDebug(string.Format("Dequeue to parse: {0}", data));
+
+                                    this.ParseInternalResponse(data);
+                                }
                             }
+                            this.busy = false;
                         }
-                        this.busy = false;
                     }
                 }
                 catch (Exception e)
@@ -574,13 +619,7 @@ namespace QscQsys
         /// <param name="data"></param>
         public void ParseResponse(string _data)
         {
-            try
-            {
-                this.responseQueue.Enqueue(_data);
-            }
-            catch (Exception e)
-            {
-            }
+            this.responseQueue.Enqueue(_data);
         }
 
         public void SendDebug(string _msg)

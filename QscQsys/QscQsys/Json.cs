@@ -95,14 +95,48 @@ namespace QscQsys
         [JsonProperty("params")]
         public AddComponentToChangeGroupParams ComponentParams { get; set; }
     }
-
     public class AddComponentToChangeGroupParams
     {
         [JsonProperty]
         static string Id = "1";
         public Component Component { get; set; }
-
     }
+
+    //Poll
+    public class GetComponent
+    {
+        [JsonProperty]
+        static string jsonrpc = "2.0";
+        [JsonProperty]
+        static string id = "crestron";
+        [JsonProperty]
+        static string method = "Component.Get";
+        [JsonProperty("params")]
+        public GetComponentParams Params { get; set; }
+    }
+    public class GetComponentParams
+    {
+        public string Name { get; set; }
+        public IList<GetComponentControls> Controls { get; set; }
+    }
+    public class GetComponentControls
+    {
+        public string Name { get; set; }
+    }
+
+    public class GetControls
+    {
+        [JsonProperty]
+        static string jsonrpc = "2.0";
+        [JsonProperty]
+        static string id = "crestron";
+        [JsonProperty]
+        static string method = "Control.Get";
+        [JsonProperty("params")]
+        public IList<string> Params { get; set; }
+    }
+    //Poll
+
 
     public class Component
     {
