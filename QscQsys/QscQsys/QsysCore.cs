@@ -43,7 +43,6 @@ namespace QscQsys
 
         //Queues
         private CrestronQueue<string> commandQueue;
-        private CrestronQueue<string> responseQueue;
 
         //Timers
         private CTimer commandQueueTimer;
@@ -94,9 +93,6 @@ namespace QscQsys
 
             if (this.commandQueue == null)
                 this.commandQueue = new CrestronQueue<string>();
-
-            if (this.responseQueue == null)
-                this.responseQueue = new CrestronQueue<string>();
 
             if (this.commandQueueTimer == null)
                 this.commandQueueTimer = new CTimer(CommandQueueDequeue, null, 0, 50);
@@ -412,41 +408,35 @@ namespace QscQsys
         bool busy = false;
         private void ResponseQueueDequeue(object _o)
         {
-            if (this.responseQueue.Count > 0)
+            try
             {
-                try
+                lock (RxData)
                 {
-                    lock (RxData)
+                    if (!this.busy)
                     {
-                        this.RxData.Append(this.responseQueue.Dequeue()); //Append received data to the COM buffer
-
-                        if (!this.busy)
+                        this.busy = true;
+                        while (this.RxData.ToString().Contains("\x00"))
                         {
-                            this.busy = true;
-                            while (this.RxData.ToString().Contains("\x00"))
+                            string data = this.RxData.ToString().Substring(0, this.RxData.ToString().IndexOf("\x00"));
+                            this.RxData.Remove(0, this.RxData.ToString().IndexOf("\x00") + 1);
+
+                            if (!data.Contains("jsonrpc\":\"2.0\",\"method\":\"ChangeGroup.Poll\",\"params\":{\"Id\":\"1\",\"Changes\":[]}}") && data.Length > 3)
                             {
-                                string data = this.RxData.ToString().Substring(0, this.RxData.ToString().IndexOf("\x00"));
-                                this.RxData.Remove(0, this.RxData.ToString().IndexOf("\x00") + 1);
+                                if (this.debug)
+                                    this.SendDebug(string.Format("Dequeue to parse: {0}", data));
 
-                                if (!data.Contains("jsonrpc\":\"2.0\",\"method\":\"ChangeGroup.Poll\",\"params\":{\"Id\":\"1\",\"Changes\":[]}}") && data.Length > 3)
-                                {
-                                    if (this.debug)
-                                        this.SendDebug(string.Format("Dequeue to parse: {0}", data));
-
-                                    this.ParseInternalResponse(data);
-                                }
+                                this.ParseInternalResponse(data);
                             }
-                            this.busy = false;
                         }
+                        this.busy = false;
                     }
                 }
-                catch (Exception e)
-                {
-                    this.busy = false;
-                    //ErrorLog.Error("Error in QsysProcessor ResponseQueueDequeue: {0}", e.Message);
-                    this.SendDebug(String.Format("Error in QsysProcessor ResponseQueueDequeue: \r\n--------MESSAGE---------\r\n{0}\r\n--------TRACE---------\r\n{1}\r\n--------ORIGINAL---------\r\n{2}\r\n---------------------\r\n", e.Message, e.StackTrace, RxData.ToString()));
-                    this.RxData.Remove(0, this.RxData.Length);
-                }
+            }
+            catch (Exception e)
+            {
+                this.busy = false;
+                this.SendDebug(String.Format("Error in QsysProcessor ResponseQueueDequeue: \r\n--------MESSAGE---------\r\n{0}\r\n--------TRACE---------\r\n{1}\r\n--------ORIGINAL---------\r\n{2}\r\n---------------------\r\n", e.Message, e.StackTrace, RxData.ToString()));
+                this.RxData.Remove(0, this.RxData.Length);
             }
         }
 
@@ -609,7 +599,7 @@ namespace QscQsys
         /// <param name="data"></param>
         public void ParseResponse(string _data)
         {
-            this.responseQueue.Enqueue(_data);
+            this.RxData.Append(_data);
         }
 
         public void SendDebug(string _msg)
