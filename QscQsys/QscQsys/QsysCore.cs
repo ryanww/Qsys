@@ -367,16 +367,6 @@ namespace QscQsys
                 }
                 commandQueue.Enqueue(JsonConvert.SerializeObject(gc));
             }
-
-            //addControls.ControlParams = new AddControlToChangeGroupParams();
-            //addControls.ControlParams.Controls = new List<string>();
-            //foreach (var item in Controls)
-            //{
-            //    addControls.ControlParams.Controls.Add(item.Key);
-            //    this.SendDebug(string.Format("Adding named control: {0} to change group", item.Key));
-            //}
-            //this.commandQueue.Enqueue(JsonConvert.SerializeObject(addControls));
-
         }
 
         private void SendHeartbeat(object _o)
