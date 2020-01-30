@@ -410,26 +410,23 @@ namespace QscQsys
         {
             try
             {
-                lock (RxData)
+                if (!this.busy)
                 {
-                    if (!this.busy)
+                    this.busy = true;
+                    while (this.RxData.ToString().Contains("\x00"))
                     {
-                        this.busy = true;
-                        while (this.RxData.ToString().Contains("\x00"))
+                        string data = this.RxData.ToString().Substring(0, this.RxData.ToString().IndexOf("\x00"));
+                        this.RxData.Remove(0, this.RxData.ToString().IndexOf("\x00") + 1);
+
+                        if (!data.Contains("jsonrpc\":\"2.0\",\"method\":\"ChangeGroup.Poll\",\"params\":{\"Id\":\"1\",\"Changes\":[]}}") && data.Length > 3)
                         {
-                            string data = this.RxData.ToString().Substring(0, this.RxData.ToString().IndexOf("\x00"));
-                            this.RxData.Remove(0, this.RxData.ToString().IndexOf("\x00") + 1);
+                            if (this.debug)
+                                this.SendDebug(string.Format("Dequeue to parse: {0}", data));
 
-                            if (!data.Contains("jsonrpc\":\"2.0\",\"method\":\"ChangeGroup.Poll\",\"params\":{\"Id\":\"1\",\"Changes\":[]}}") && data.Length > 3)
-                            {
-                                if (this.debug)
-                                    this.SendDebug(string.Format("Dequeue to parse: {0}", data));
-
-                                this.ParseInternalResponse(data);
-                            }
+                            this.ParseInternalResponse(data);
                         }
-                        this.busy = false;
                     }
+                    this.busy = false;
                 }
             }
             catch (Exception e)
